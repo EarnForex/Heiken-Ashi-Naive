@@ -5,14 +5,18 @@
 //+------------------------------------------------------------------+
 #property copyright "Copyright © 2013-2022, EarnForex"
 #property link      "https://www.earnforex.com/metatrader-expert-advisors/Heiken-Ashi-Naive/"
-#property version   "1.02"
+#property version   "1.03"
 #property strict
 
 #property description "Uses Heiken Ashi candles."
-#property description "Sells on bullish HA candle, its body is longer than previous body, previous also bullish, and current candle has no lower wick."
-#property description "Buys on bearish HA candle, its body is longer than previous body, previous also bearish, and current candle has no upper wick."
-#property description "Exit shorts on bearish HA candle and current candle has no upper wick, previous also bearish."
-#property description "Exit longs on bullish HA candle and current candle has no lower wick, previous also bullish."
+#property description "Buy: Bullish HA candle, no lower wick, body longer than prev. body, prev. candle bullish."
+#property description "Sell: Bearish HA candle, no upper wick, body longer than prev. body, prev. candle bearish."
+#property description "Exit buy: Bearish HA candle, current candle has no upper wick, previous also bearish."
+#property description "Exit sell: Bullish HA candle, current candle has no lower wick, previous also bullish."
+#property description "You can choose either direct trading (buy on bullish) or inverted (sell on bullish)."
+
+// Main:
+input bool Inverted = true; // Inversion: If true, sells on Bullish signals, buys on Bearish.
 
 // Money management:
 input double Lots = 0.1; // Lots: Basic lot size
@@ -20,7 +24,7 @@ input bool MM  = false; // MM: If true - ATR-based position sizing
 input int ATR_Period = 20;
 input double ATR_Multiplier = 1;
 input double Risk = 2; // Risk: Risk tolerance in percentage points
-input double FixedBalance = 0; // FixedBalance: If >= 0, position size will use it instead of actual balance.
+input double FixedBalance = 0; // FixedBalance: If >= 0, will use it instead of actual balance.
 input double MoneyRisk = 0; // MoneyRisk: Risk tolerance in base currency
 input bool UseMoneyInsteadOfPercentage = false;
 input bool UseEquityInsteadOfBalance = false;
@@ -30,11 +34,11 @@ input string OrderCommentary = "HAN";
 input int Slippage = 100;  // Slippage: Tolerated slippage in points
 input int Magic = 1520122013;  // Magic: Order magic number
 
-// Global variables
+// Global variables:
 int LastBars = 0;
 bool HaveLongPosition;
 bool HaveShortPosition;
-double StopLoss; // Not actual stop-loss - just a potential loss of MM estimation.
+double StopLoss; // Not the actual stop-loss - just a potential loss of MM estimation.
 
 void OnTick()
 {
@@ -70,33 +74,49 @@ void OnTick()
     if (HAOpenLatest >= HACloseLatest) HALowLatest = iCustom(NULL, 0, "Heiken Ashi", 1, 1);
     else HALowLatest = iCustom(NULL, 0, "Heiken Ashi", 0, 1);
 
-    // REVERSED!!!
-
     // Close signals.
     // Bullish HA candle, current has no lower wick, previous also bullish.
     if ((HAOpenLatest < HACloseLatest) && (HALowLatest == HAOpenLatest) && (HAOpenPrevious < HAClosePrevious))
     {
-        BullishClose = true;
+        if (Inverted) BullishClose = true;
+        else BearishClose = true;
     }
     // Bearish HA candle, current has no upper wick, previous also bearish.
     else if ((HAOpenLatest > HACloseLatest) && (HAHighLatest == HAOpenLatest) && (HAOpenPrevious > HAClosePrevious))
     {
-        BearishClose = true;
+        if (Inverted) BearishClose = true;
+        else BullishClose = true;
     }
 
-    // Sell entry condition
+    // First entry condition
     // Bullish HA candle, and body is longer than previous body, previous also bullish, current has no lower wick.
     if ((HAOpenLatest < HACloseLatest) && (HACloseLatest - HAOpenLatest > MathAbs(HAClosePrevious - HAOpenPrevious)) && (HAOpenPrevious < HAClosePrevious) && (HALowLatest == HAOpenLatest))
     {
-        Bullish = false;
-        Bearish = true;
+        if (Inverted)
+        {
+            Bullish = false;
+            Bearish = true;
+        }
+        else
+        {
+            Bullish = true;
+            Bearish = false;
+        }
     }
-    // Buy entry condition
+    // Second entry condition
     // Bearish HA candle, and body is longer than previous body, previous also bearish, current has no upper wick.
     else if ((HAOpenLatest > HACloseLatest) && (HAOpenLatest - HACloseLatest > MathAbs(HAClosePrevious - HAOpenPrevious)) && (HAOpenPrevious > HAClosePrevious) && (HAHighLatest == HAOpenLatest))
     {
-        Bullish = true;
-        Bearish = false;
+        if (Inverted)
+        {
+            Bullish = true;
+            Bearish = false;
+        }
+        else
+        {
+            Bullish = false;
+            Bearish = true;
+        }
     }
     else
     {
